@@ -17,13 +17,12 @@
  */
 package com.graphhopper.reader.gtfs;
 
-import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIteratorState;
 
 import java.time.Instant;
 import java.util.Iterator;
 
-class Label {
+public class Label {
 
     static class Transition {
         final Label label;
@@ -36,7 +35,7 @@ class Label {
 
         @Override
         public String toString() {
-            return (edge != null ? edge.toString() + " -> " : "") + label.adjNode;
+            return (edge != null ? edge.toString() + " -> " : "") + label.node;
         }
 
     }
@@ -62,10 +61,10 @@ class Label {
         }
     }
 
-    final long currentTime;
+    public final long currentTime;
 
-    final int edge;
-    final int adjNode;
+    public final int edge;
+    public final int node;
 
     final int nTransfers;
     final int nWalkDistanceConstraintViolations;
@@ -77,12 +76,12 @@ class Label {
     final long residualDelay;
     final boolean impossible;
 
-    final Label parent;
+    public final Label parent;
 
-    Label(long currentTime, int edgeId, int adjNode, int nTransfers, int nWalkDistanceConstraintViolations, double walkDistance, Long departureTime, long walkTime, long residualDelay, boolean impossible, Label parent) {
+    Label(long currentTime, int edgeId, int node, int nTransfers, int nWalkDistanceConstraintViolations, double walkDistance, Long departureTime, long walkTime, long residualDelay, boolean impossible, Label parent) {
         this.currentTime = currentTime;
         this.edge = edgeId;
-        this.adjNode = adjNode;
+        this.node = node;
         this.nTransfers = nTransfers;
         this.nWalkDistanceConstraintViolations = nWalkDistanceConstraintViolations;
         this.walkDistanceOnCurrentLeg = walkDistance;
@@ -95,7 +94,7 @@ class Label {
 
     @Override
     public String toString() {
-        return adjNode + " " + Instant.ofEpochMilli(currentTime) + " " + nTransfers + " " + nWalkDistanceConstraintViolations + " " +  (departureTime != null ? Instant.ofEpochMilli(departureTime) : "");
+        return node + " " + Instant.ofEpochMilli(currentTime) + " " + nTransfers + " " + nWalkDistanceConstraintViolations + " " +  (departureTime != null ? Instant.ofEpochMilli(departureTime) : "");
     }
 
     static Iterable<Transition> reverseEdges(Label leaf, GraphExplorer graph, PtFlagEncoder flagEncoder, boolean reverseEdgeFlags) {
@@ -117,7 +116,7 @@ class Label {
                             return new Transition(label, null);
                         } else {
                             EdgeIteratorState edgeIteratorState = label.parent == null ? null :
-                                    graph.getEdgeIteratorState(label.edge, label.parent.adjNode).detach(reverseEdgeFlags);
+                                    graph.getEdgeIteratorState(label.edge, label.parent.node).detach(reverseEdgeFlags);
                             Transition transition;
                             if (reverseEdgeFlags) {
                                 transition = new Transition(label, edgeIteratorState != null ? getEdgeLabel(edgeIteratorState, flagEncoder) : null);

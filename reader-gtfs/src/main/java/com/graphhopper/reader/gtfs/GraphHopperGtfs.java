@@ -182,9 +182,9 @@ public final class GraphHopperGtfs implements GraphHopperAPI {
                         tripFromLabel.parseSolutionIntoPath(reverse, flagEncoder, translation, graphExplorer, accessEgressWeighting, stationNode.parent, new PointList()) :
                         new PathWrapper();
                 final VirtualEdgeIteratorState newEdge = new VirtualEdgeIteratorState(stationNode.edge,
-                        nextEdgeId++, reverse ? stationNode.adjNode : nextNodeId, reverse ? nextNodeId : stationNode.adjNode, pathWrapper.getDistance(), 0, "", pathWrapper.getPoints());
+                        nextEdgeId++, reverse ? stationNode.node : nextNodeId, reverse ? nextNodeId : stationNode.node, pathWrapper.getDistance(), 0, "", pathWrapper.getPoints());
                 final VirtualEdgeIteratorState reverseNewEdge = new VirtualEdgeIteratorState(stationNode.edge,
-                        nextEdgeId++, reverse ? nextNodeId : stationNode.adjNode, reverse ? stationNode.adjNode : nextNodeId, pathWrapper.getDistance(), 0, "", pathWrapper.getPoints());
+                        nextEdgeId++, reverse ? nextNodeId : stationNode.node, reverse ? stationNode.node : nextNodeId, pathWrapper.getDistance(), 0, "", pathWrapper.getPoints());
                 newEdge.setFlags(flagEncoder.setEdgeType(newEdge.getFlags(), reverse ? GtfsStorage.EdgeType.EXIT_PT : GtfsStorage.EdgeType.ENTER_PT));
                 final long time = pathWrapper.getTime() / 1000;
                 newEdge.setFlags(flagEncoder.setTime(newEdge.getFlags(), time));
@@ -195,7 +195,7 @@ public final class GraphHopperGtfs implements GraphHopperAPI {
                 newEdge.setDistance(pathWrapper.getDistance());
                 extraEdges.add(newEdge);
                 extraEdges.add(reverseNewEdge);
-                walkPaths.put(stationNode.adjNode, pathWrapper);
+                walkPaths.put(stationNode.node, pathWrapper);
             }
 
             final QueryResult virtualNode = new QueryResult(ghPoint.getLat(), ghPoint.getLon());
@@ -208,7 +208,7 @@ public final class GraphHopperGtfs implements GraphHopperAPI {
             MultiCriteriaLabelSetting router = new MultiCriteriaLabelSetting(graphExplorer, flagEncoder, reverse, maxWalkDistancePerLeg, false, false, false, maxVisitedNodesForRequest);
             final Stream<Label> labels = router.calcLabels(node, -1, initialTime, blockedRouteTypes);
             return labels
-                    .filter(current -> current.edge != -1 && flagEncoder.getEdgeType(graphExplorer.getEdgeIteratorState(current.edge, current.adjNode).getFlags()) == edgeType)
+                    .filter(current -> current.edge != -1 && flagEncoder.getEdgeType(graphExplorer.getEdgeIteratorState(current.edge, current.node).getFlags()) == edgeType)
                     .collect(Collectors.toList());
         }
 
@@ -255,20 +255,20 @@ public final class GraphHopperGtfs implements GraphHopperAPI {
                 while (solution.parent.parent != null) {
                     solution = solution.parent;
                 }
-                return solution.adjNode;
+                return solution.node;
             } else {
-                return solution.parent.adjNode;
+                return solution.parent.node;
             }
         }
 
         private int egressNode(Label solution) {
             if (!arriveBy) {
-                return solution.parent.adjNode;
+                return solution.parent.node;
             } else {
                 while(solution.parent.parent != null) {
                     solution = solution.parent;
                 }
-                return solution.adjNode;
+                return solution.node;
             }
         }
 
@@ -279,7 +279,7 @@ public final class GraphHopperGtfs implements GraphHopperAPI {
             router.setBetaTransfers(betaTransfers);
             final Stream<Label> labels = router.calcLabels(startNode, destNode, initialTime, blockedRouteTypes);
             List<Label> solutions = labels
-                    .filter(current -> destNode == current.adjNode)
+                    .filter(current -> destNode == current.node)
                     .limit(limitSolutions)
                     .collect(Collectors.toList());
             response.addDebugInfo("routing:" + stopWatch.stop().getSeconds() + "s");
@@ -420,7 +420,7 @@ public final class GraphHopperGtfs implements GraphHopperAPI {
                     MultiCriteriaLabelSetting router = new MultiCriteriaLabelSetting(graphExplorer, flagEncoder, false, Double.MAX_VALUE, false, false, false, Integer.MAX_VALUE);
                     final Stream<Label> labels = router.calcLabels(fromnode, tonode, Instant.ofEpochMilli(0), 0);
                     List<Label> solutions = labels
-                            .filter(current -> tonode == current.adjNode)
+                            .filter(current -> tonode == current.node)
                             .collect(Collectors.toList());
                     TransferWithTime transferWithTime = new TransferWithTime();
                     transferWithTime.id = e.getKey();
