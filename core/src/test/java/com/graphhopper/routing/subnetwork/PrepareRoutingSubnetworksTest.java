@@ -18,6 +18,8 @@
 package com.graphhopper.routing.subnetwork;
 
 import com.carrotsearch.hppc.IntArrayList;
+import com.graphhopper.routing.profiles.BooleanEncodedValue;
+import com.graphhopper.routing.profiles.DecimalEncodedValue;
 import com.graphhopper.routing.subnetwork.PrepareRoutingSubnetworks.PrepEdgeFilter;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.storage.GraphBuilder;
@@ -165,8 +167,8 @@ public class PrepareRoutingSubnetworksTest {
 
         // mark certain edges inaccessible for all encoders
         for (EdgeIteratorState edge : Arrays.asList(GHUtility.getEdge(g, 5, 6), GHUtility.getEdge(g, 4, 5), GHUtility.getEdge(g, 4, 6))) {
-            for (FlagEncoder encoders : em2.fetchEdgeEncoders()) {
-                edge.setFlags(encoders.setAccess(new IntsRef(), false, false));
+            for (FlagEncoder encoder : em2.fetchEdgeEncoders()) {
+                edge.set(encoder.getAccessEnc(), false).setReverse(encoder.getAccessEnc(), false);
             }
         }
 
@@ -181,8 +183,10 @@ public class PrepareRoutingSubnetworksTest {
         BikeFlagEncoder bikeEncoder = new BikeFlagEncoder();
         EncodingManager em2 = new EncodingManager(carEncoder, bikeEncoder);
         GraphHopperStorage g = createSubnetworkTestStorage2(em2);
-        IntsRef edgeFlags = carEncoder.setAccess(carEncoder.setSpeed(new IntsRef(), 10), false, false);
-        GHUtility.getEdge(g, 3, 4).setFlags(bikeEncoder.setAccess(bikeEncoder.setSpeed(edgeFlags, 5), true, true));
+
+        EdgeIteratorState edge = GHUtility.getEdge(g, 3, 4);
+        GHUtility.setProperties(edge, carEncoder, 10, false, false);
+        GHUtility.setProperties(edge, bikeEncoder, 5, true, true);
         PrepareRoutingSubnetworks instance = new PrepareRoutingSubnetworks(g, em2.fetchEdgeEncoders());
         instance.setMinNetworkSize(5);
         instance.doWork();
@@ -195,8 +199,9 @@ public class PrepareRoutingSubnetworksTest {
         EdgeExplorer bikeExplorer = g.createEdgeExplorer(DefaultEdgeFilter.allEdges(bikeEncoder));
         assertEquals(GHUtility.asSet(7, 2, 1, 4), GHUtility.getNeighbors(bikeExplorer.setBaseNode(3)));
 
-        edgeFlags = carEncoder.setAccess(carEncoder.setSpeed(new IntsRef(), 10), false, false);
-        GHUtility.getEdge(g, 3, 4).setFlags(bikeEncoder.setAccess(bikeEncoder.setSpeed(edgeFlags, 5), false, false));
+        edge = GHUtility.getEdge(g, 3, 4);
+        GHUtility.setProperties(edge, carEncoder, 10, false, false);
+        GHUtility.setProperties(edge, bikeEncoder, 5, false, false);
         instance = new PrepareRoutingSubnetworks(g, em2.fetchEdgeEncoders());
         instance.setMinNetworkSize(5);
         instance.doWork();

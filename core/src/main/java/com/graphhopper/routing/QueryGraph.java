@@ -409,9 +409,9 @@ public class QueryGraph implements Graph {
 
         // edges between base and snapped point
         VirtualEdgeIteratorState baseEdge = new VirtualEdgeIteratorState(origTraversalKey,
-                virtEdgeId, prevNodeId, nodeId, baseDistance, closestEdge.getFlags(), closestEdge.getName(), basePoints);
+                virtEdgeId, prevNodeId, nodeId, baseDistance, closestEdge.getFlags(), closestEdge.getName(), basePoints, false);
         VirtualEdgeIteratorState baseReverseEdge = new VirtualEdgeIteratorState(origRevTraversalKey,
-                virtEdgeId, nodeId, prevNodeId, baseDistance, reverseFlags, closestEdge.getName(), baseReversePoints);
+                virtEdgeId, nodeId, prevNodeId, baseDistance, reverseFlags, closestEdge.getName(), baseReversePoints, true);
         baseEdge.setReverseEdge(baseReverseEdge);
         baseReverseEdge.setReverseEdge(baseEdge);
         virtualEdges.add(baseEdge);
@@ -483,8 +483,8 @@ public class QueryGraph implements Graph {
      * the other adjacent node of virtualNodeId.
      * <p>
      *
-     * @param virtualNodeId  virtual node at which edges get unfavored
-     * @param virtualEdgeId  this edge and the reverse virtual edge become unfavored
+     * @param virtualNodeId virtual node at which edges get unfavored
+     * @param virtualEdgeId this edge and the reverse virtual edge become unfavored
      */
     public void unfavorVirtualEdgePair(int virtualNodeId, int virtualEdgeId) {
         if (!isVirtualNode(virtualNodeId)) {

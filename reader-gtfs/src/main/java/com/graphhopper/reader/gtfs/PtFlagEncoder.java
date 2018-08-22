@@ -22,17 +22,17 @@ import com.graphhopper.reader.ReaderRelation;
 import com.graphhopper.reader.ReaderWay;
 import com.graphhopper.routing.util.AbstractFlagEncoder;
 import com.graphhopper.routing.util.EncodedDoubleValue;
-import com.graphhopper.routing.util.EncodedValue;
+import com.graphhopper.routing.util.EncodedValueOld;
 import com.graphhopper.routing.util.FootFlagEncoder;
 import com.graphhopper.storage.IntsRef;
 
 public class PtFlagEncoder extends AbstractFlagEncoder {
 
     private final FootFlagEncoder footFlagEncoder;
-    private EncodedValue time;
-    private EncodedValue transfers;
-    private EncodedValue validityId;
-    private EncodedValue type;
+    private EncodedValueOld time;
+    private EncodedValueOld transfers;
+    private EncodedValueOld validityId;
+    private EncodedValueOld type;
 
     public PtFlagEncoder() {
         super(0, 1, 0);
@@ -55,14 +55,14 @@ public class PtFlagEncoder extends AbstractFlagEncoder {
         speedEncoder = new EncodedDoubleValue("Speed", shift, speedBits, speedFactor, 0, 0);
         shift += speedEncoder.getBits();
 
-        time = new EncodedValue("time", shift, 17, 1.0, 0, 24 * 60 * 60);
+        time = new EncodedValueOld("time", shift, 17, 1.0, 0, 24 * 60 * 60);
         shift += time.getBits();
-        transfers = new EncodedValue("transfers", shift, 1, 1.0, 0, 1);
+        transfers = new EncodedValueOld("transfers", shift, 1, 1.0, 0, 1);
         shift += transfers.getBits();
-        validityId = new EncodedValue("validityId", shift, 20, 1.0, 0, 1048575);
+        validityId = new EncodedValueOld("validityId", shift, 20, 1.0, 0, 1048575);
         shift += validityId.getBits();
         GtfsStorage.EdgeType[] edgeTypes = GtfsStorage.EdgeType.values();
-        type = new EncodedValue("type", shift, 4, 1.0, GtfsStorage.EdgeType.HIGHWAY.ordinal(), edgeTypes[edgeTypes.length - 1].ordinal());
+        type = new EncodedValueOld("type", shift, 4, 1.0, GtfsStorage.EdgeType.HIGHWAY.ordinal(), edgeTypes[edgeTypes.length - 1].ordinal());
         shift += type.getBits();
         return shift;
     }

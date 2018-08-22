@@ -557,12 +557,12 @@ public class OSMReaderTest {
     @Test
     public void testEstimatedCenter() {
         final CarFlagEncoder encoder = new CarFlagEncoder() {
-            private EncodedValue objectEncoder;
+            private EncodedValueOld objectEncoder;
 
             @Override
             public int defineNodeBits(int index, int shift) {
                 shift = super.defineNodeBits(index, shift);
-                objectEncoder = new EncodedValue("oEnc", shift, 2, 1, 0, 3, true);
+                objectEncoder = new EncodedValueOld("oEnc", shift, 2, 1, 0, 3, true);
                 return shift + 2;
             }
 

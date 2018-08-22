@@ -17,7 +17,10 @@
  */
 package com.graphhopper.util;
 
-import com.graphhopper.routing.util.FlagEncoder;
+import com.graphhopper.routing.profiles.BooleanEncodedValue;
+import com.graphhopper.routing.profiles.DecimalEncodedValue;
+import com.graphhopper.routing.profiles.IntEncodedValue;
+import com.graphhopper.routing.profiles.StringEncodedValue;
 import com.graphhopper.storage.IntsRef;
 
 /**
@@ -29,7 +32,8 @@ import com.graphhopper.storage.IntsRef;
  * @see EdgeExplorer
  */
 public interface EdgeIteratorState {
-    int K_UNFAVORED_EDGE = -1;
+    // TODO NOW - does the mechanism in VirtualEdgeIteratorState work?
+    BooleanEncodedValue UNFAVORED_EDGE = new BooleanEncodedValue("unfavored");
 
     /**
      * @return the edge id of the current edge. Do not make any assumptions about the concrete
@@ -82,10 +86,16 @@ public interface EdgeIteratorState {
 
     EdgeIteratorState setDistance(double dist);
 
-    // TODO rename to getData
+    /**
+     * Returns edge properties stored in direction of the raw database layout. So do not use it directly, instead
+     * use the appropriate set/get methods with its EncodedValue object.
+     */
     IntsRef getFlags();
 
-    EdgeIteratorState setFlags(IntsRef flags);
+    /**
+     * Stores the specified edgeFlags down to the DataAccess
+     */
+    EdgeIteratorState setFlags(IntsRef edgeFlags);
 
     /**
      * @return the additional field value for this edge
@@ -97,24 +107,37 @@ public interface EdgeIteratorState {
      */
     EdgeIteratorState setAdditionalField(int value);
 
-    /**
-     * @see FlagEncoder#isForward(IntsRef) and #472
-     */
-    boolean isForward(FlagEncoder encoder);
+    boolean get(BooleanEncodedValue property);
 
-    /**
-     * @see FlagEncoder#isBackward(IntsRef) and #472
-     */
-    boolean isBackward(FlagEncoder encoder);
+    EdgeIteratorState set(BooleanEncodedValue property, boolean value);
 
-    /**
-     * Get additional boolean information of the edge.
-     * <p>
-     *
-     * @param key      direction or vehicle dependent integer key
-     * @param _default default value if key is not found
-     */
-    boolean getBool(int key, boolean _default);
+    boolean getReverse(BooleanEncodedValue property);
+
+    EdgeIteratorState setReverse(BooleanEncodedValue property, boolean value);
+
+    int get(IntEncodedValue property);
+
+    EdgeIteratorState set(IntEncodedValue property, int value);
+
+    int getReverse(IntEncodedValue property);
+
+    EdgeIteratorState setReverse(IntEncodedValue property, int value);
+
+    double get(DecimalEncodedValue property);
+
+    EdgeIteratorState set(DecimalEncodedValue property, double value);
+
+    double getReverse(DecimalEncodedValue property);
+
+    EdgeIteratorState setReverse(DecimalEncodedValue property, double value);
+
+    String get(StringEncodedValue property);
+
+    EdgeIteratorState set(StringEncodedValue property, String value);
+
+    String getReverse(StringEncodedValue property);
+
+    EdgeIteratorState setReverse(StringEncodedValue property, String value);
 
     String getName();
 
@@ -122,7 +145,6 @@ public interface EdgeIteratorState {
 
     /**
      * Clones this EdgeIteratorState.
-     * <p>
      *
      * @param reverse if true a detached edgeState with reversed properties is created where base
      *                and adjacent nodes, flags and wayGeometry are in reversed order. See #162 for more details

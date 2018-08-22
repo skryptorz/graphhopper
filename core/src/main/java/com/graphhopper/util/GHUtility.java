@@ -21,6 +21,10 @@ import com.carrotsearch.hppc.IntIndexedContainer;
 import com.graphhopper.coll.GHBitSet;
 import com.graphhopper.coll.GHBitSetImpl;
 import com.graphhopper.coll.GHIntArrayList;
+import com.graphhopper.routing.profiles.BooleanEncodedValue;
+import com.graphhopper.routing.profiles.DecimalEncodedValue;
+import com.graphhopper.routing.profiles.IntEncodedValue;
+import com.graphhopper.routing.profiles.StringEncodedValue;
 import com.graphhopper.routing.util.AllCHEdgesIterator;
 import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.routing.util.EdgeFilter;
@@ -117,10 +121,11 @@ public class GHUtility {
     public static void printEdgeInfo(final Graph g, FlagEncoder encoder) {
         System.out.println("-- Graph nodes:" + g.getNodes() + " edges:" + g.getAllEdges().length() + " ---");
         AllEdgesIterator iter = g.getAllEdges();
+        BooleanEncodedValue accessEnc = encoder.getAccessEnc();
         while (iter.next()) {
             String prefix = (iter instanceof AllCHEdgesIterator && ((AllCHEdgesIterator) iter).isShortcut()) ? "sc" : "  ";
-            String fwdStr = iter.isForward(encoder) ? "fwd" : "   ";
-            String bwdStr = iter.isBackward(encoder) ? "bwd" : "   ";
+            String fwdStr = iter.get(accessEnc) ? "fwd" : "   ";
+            String bwdStr = iter.getReverse(accessEnc) ? "bwd" : "   ";
             System.out.println(prefix + " " + iter + " " + fwdStr + " " + bwdStr + " " + iter.getDistance());
         }
     }
@@ -146,9 +151,10 @@ public class GHUtility {
         }
     }
 
-    private static void printUnitTestEdge(FlagEncoder flagEncoder, EdgeIteratorState edge) {
-        boolean fwd = edge.isForward(flagEncoder);
-        boolean bwd = edge.isBackward(flagEncoder);
+    private static void printUnitTestEdge(FlagEncoder encoder, EdgeIteratorState edge) {
+        BooleanEncodedValue accessEnc = encoder.getAccessEnc();
+        boolean fwd = edge.get(accessEnc);
+        boolean bwd = edge.getReverse(accessEnc);
         if (!fwd && !bwd) {
             return;
         }
@@ -177,7 +183,7 @@ public class GHUtility {
         String str = nodeId + ":" + na.getLatitude(nodeId) + "," + na.getLongitude(nodeId) + "\n";
         while (iter.next()) {
             str += "  ->" + iter.getAdjNode() + "(" + iter.getSkippedEdge1() + "," + iter.getSkippedEdge2() + ") "
-                    + iter.getEdge() + " \t" + BitUtil.BIG.toBitString(iter.getFlags().flags, 8) + "\n";
+                    + iter.getEdge() + " \t" + BitUtil.BIG.toBitString(iter.getFlags().ints[0], 8) + "\n";
         }
         return str;
     }
@@ -189,7 +195,7 @@ public class GHUtility {
         while (iter.next()) {
             str += "  ->" + iter.getAdjNode() + " (" + iter.getDistance() + ") pillars:"
                     + iter.fetchWayGeometry(0).getSize() + ", edgeId:" + iter.getEdge()
-                    + "\t" + BitUtil.BIG.toBitString(iter.getFlags().flags, 8) + "\n";
+                    + "\t" + BitUtil.BIG.toBitString(iter.getFlags().ints[0], 8) + "\n";
         }
         return str;
     }
@@ -326,11 +332,6 @@ public class GHUtility {
             public IntsRef getFlags() {
                 return flags;
             }
-
-            @Override
-            public boolean getBool(int key, boolean _default) {
-                return _default;
-            }
         };
     }
 
@@ -380,17 +381,49 @@ public class GHUtility {
         return edgeKey / 2;
     }
 
+    public static IntsRef setProperties(IntsRef edgeFlags, FlagEncoder encoder, double averageSpeed, boolean fwd, boolean bwd) {
+        if (averageSpeed < 0.0001 && (fwd || bwd))
+            throw new IllegalStateException("Zero speed is only allowed if edge will get inaccessible. Otherwise Weighting can produce inconsistent results");
+
+        BooleanEncodedValue accessEnc = encoder.getAccessEnc();
+        DecimalEncodedValue avSpeedEnc = encoder.getAverageSpeedEnc();
+        accessEnc.setBool(false, edgeFlags, fwd);
+        accessEnc.setBool(true, edgeFlags, bwd);
+        if (fwd)
+            avSpeedEnc.setDecimal(false, edgeFlags, averageSpeed);
+        if (bwd)
+            avSpeedEnc.setDecimal(true, edgeFlags, averageSpeed);
+        return edgeFlags;
+    }
+
+    public static EdgeIteratorState setProperties(EdgeIteratorState edge, FlagEncoder encoder, double fwdSpeed, double bwdSpeed) {
+        BooleanEncodedValue accessEnc = encoder.getAccessEnc();
+        edge.set(accessEnc, true).setReverse(accessEnc, true);
+        DecimalEncodedValue avSpeedEnc = encoder.getAverageSpeedEnc();
+        return edge.set(avSpeedEnc, fwdSpeed).setReverse(avSpeedEnc, bwdSpeed);
+    }
+
+    public static IntsRef setProperties(IntsRef edgeFlags, FlagEncoder encoder, double fwdSpeed, double bwdSpeed) {
+        BooleanEncodedValue accessEnc = encoder.getAccessEnc();
+        accessEnc.setBool(false, edgeFlags, true);
+        accessEnc.setBool(true, edgeFlags, true);
+        DecimalEncodedValue avSpeedEnc = encoder.getAverageSpeedEnc();
+        avSpeedEnc.setDecimal(false, edgeFlags, fwdSpeed);
+        avSpeedEnc.setDecimal(true, edgeFlags, bwdSpeed);
+        return edgeFlags;
+    }
+
     public static EdgeIteratorState setProperties(EdgeIteratorState edge, FlagEncoder encoder, double averageSpeed, boolean fwd, boolean bwd) {
         if (averageSpeed < 0.0001 && (fwd || bwd))
             throw new IllegalStateException("Zero speed is only allowed if edge will get inaccessible. Otherwise Weighting can produce inconsistent results");
 
-        IntsRef intsRef = edge.getFlags();
-        encoder.setAccess(intsRef, fwd, bwd);
+        BooleanEncodedValue accessEnc = encoder.getAccessEnc();
+        DecimalEncodedValue avSpeedEnc = encoder.getAverageSpeedEnc();
+        edge.set(accessEnc, fwd).setReverse(accessEnc, bwd);
         if (fwd)
-            encoder.setSpeed(intsRef, averageSpeed);
+            edge.set(avSpeedEnc, averageSpeed);
         if (bwd)
-            encoder.setReverseSpeed(intsRef, averageSpeed);
-        edge.setFlags(intsRef);
+            edge.setReverse(avSpeedEnc, averageSpeed);
         return edge;
     }
 
@@ -465,27 +498,92 @@ public class GHUtility {
         }
 
         @Override
-        public boolean getBool(int key, boolean _default) {
-            throw new UnsupportedOperationException("Not supported. Edge is empty.");
-        }
-
-        @Override
-        public boolean isBackward(FlagEncoder encoder) {
-            throw new UnsupportedOperationException("Not supported. Edge is empty.");
-        }
-
-        @Override
-        public boolean isForward(FlagEncoder encoder) {
-            throw new UnsupportedOperationException("Not supported. Edge is empty.");
-        }
-
-        @Override
         public int getAdditionalField() {
             throw new UnsupportedOperationException("Not supported. Edge is empty.");
         }
 
         @Override
         public EdgeIteratorState setAdditionalField(int value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public boolean get(BooleanEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState set(BooleanEncodedValue property, boolean value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public boolean getReverse(BooleanEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState setReverse(BooleanEncodedValue property, boolean value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public int get(IntEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState set(IntEncodedValue property, int value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public int getReverse(IntEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState setReverse(IntEncodedValue property, int value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public double get(DecimalEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState set(DecimalEncodedValue property, double value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public double getReverse(DecimalEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState setReverse(DecimalEncodedValue property, double value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public String get(StringEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState set(StringEncodedValue property, String value) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public String getReverse(StringEncodedValue property) {
+            throw new UnsupportedOperationException("Not supported. Edge is empty.");
+        }
+
+        @Override
+        public EdgeIteratorState setReverse(StringEncodedValue property, String value) {
             throw new UnsupportedOperationException("Not supported. Edge is empty.");
         }
 

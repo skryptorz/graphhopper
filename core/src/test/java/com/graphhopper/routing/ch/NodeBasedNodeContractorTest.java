@@ -19,6 +19,7 @@ package com.graphhopper.routing.ch;
 
 import com.graphhopper.routing.Dijkstra;
 import com.graphhopper.routing.DijkstraOneToMany;
+import com.graphhopper.routing.profiles.BooleanEncodedValue;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.routing.weighting.ShortestWeighting;
 import com.graphhopper.routing.weighting.Weighting;
@@ -39,6 +40,7 @@ import static org.junit.Assert.*;
 public class NodeBasedNodeContractorTest {
     private final CarFlagEncoder encoder = new CarFlagEncoder();
     private final EncodingManager encodingManager = new EncodingManager(encoder);
+    private final BooleanEncodedValue accessEnc = encoder.getAccessEnc();
     private final Weighting weighting = new ShortestWeighting(encoder);
     private final GraphHopperStorage graph = new GraphBuilder(encodingManager).setCHGraph(weighting).create();
     private final CHGraph lg = graph.getGraph(CHGraph.class);
@@ -79,7 +81,6 @@ public class NodeBasedNodeContractorTest {
         createExampleGraph();
         final double normalDist = new Dijkstra(graph, weighting, traversalMode).calcPath(4, 2).getDistance();
         DijkstraOneToMany algo = new DijkstraOneToMany(graph, weighting, traversalMode);
-        CHGraph lg = graph.getGraph(CHGraph.class);
 
         setMaxLevelOnAllNodes();
 
@@ -173,14 +174,14 @@ public class NodeBasedNodeContractorTest {
         graph.freeze();
 
         CHEdgeIteratorState sc1to4 = lg.shortcut(1, 4);
-        IntsRef chFlags = new IntsRef();
-        chFlags.flags = PrepareEncoder.getScDirMask();
+        IntsRef chFlags = encodingManager.createEdgeFlags();
+        chFlags.ints[0] = PrepareEncoder.getScDirMask();
         sc1to4.setFlags(chFlags);
         sc1to4.setWeight(2);
         sc1to4.setDistance(2);
         sc1to4.setSkippedEdges(iter1to3.getEdge(), iter3to4.getEdge());
 
-        chFlags.flags = PrepareEncoder.getScFwdDir();
+        chFlags.ints[0] = PrepareEncoder.getScFwdDir();
         CHEdgeIteratorState sc4to6 = lg.shortcut(4, 6);
         sc4to6.setFlags(chFlags);
         sc4to6.setWeight(2);
@@ -304,7 +305,7 @@ public class NodeBasedNodeContractorTest {
             if (iter.isShortcut()) {
                 given.add(new Shortcut(
                         iter.getBaseNode(), iter.getAdjNode(), iter.getWeight(), iter.getDistance(),
-                        iter.isForward(encoder), iter.isBackward(encoder),
+                        iter.get(accessEnc), iter.getReverse(accessEnc),
                         iter.getSkippedEdge1(), iter.getSkippedEdge2()));
             }
         }

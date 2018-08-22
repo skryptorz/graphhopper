@@ -19,6 +19,8 @@ package com.graphhopper.routing.util;
 
 import com.graphhopper.reader.ReaderRelation;
 import com.graphhopper.reader.ReaderWay;
+import com.graphhopper.routing.profiles.DecimalEncodedValue;
+import com.graphhopper.routing.profiles.EncodedValue;
 import com.graphhopper.storage.IntsRef;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.PMap;
@@ -41,6 +43,7 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
 
     // This value determines the speed for roads with access=destination
     protected int destinationSpeed;
+    protected boolean speedTwoDirections;
     /**
      * A map which associates string to speed. Get some impression:
      * http://www.itoworld.com/map/124#fullscreen
@@ -57,6 +60,7 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
                 properties.getDouble("speed_factor", 5),
                 properties.getBool("turn_costs", false) ? 1 : 0);
         this.properties = properties;
+        this.speedTwoDirections = properties.getBool("speed_two_directions", false);
         this.setBlockFords(properties.getBool("block_fords", true));
         this.setBlockByDefault(properties.getBool("block_barriers", true));
     }
@@ -109,13 +113,6 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         badSurfaceSpeedMap.add("unpaved");
         badSurfaceSpeedMap.add("compacted");
 
-        // limit speed on bad surfaces to 30 km/h
-        badSurfaceSpeed = 30;
-
-        destinationSpeed = 5;
-
-        maxPossibleSpeed = 140;
-
         // autobahn
         defaultSpeedMap.put("motorway", 100);
         defaultSpeedMap.put("motorway_link", 70);
@@ -142,24 +139,28 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
         // forestry stuff
         defaultSpeedMap.put("track", 15);
 
+        // limit speed on bad surfaces to 30 km/h
+        badSurfaceSpeed = 30;
+        destinationSpeed = 5;
+        maxPossibleSpeed = 140;
+        speedDefault = defaultSpeedMap.get("secondary");
+
         init();
     }
 
     @Override
     public int getVersion() {
-        return 1;
+        return 2;
     }
 
     /**
      * Define the place of the speedBits in the edge flags for car.
      */
     @Override
-    public int defineWayBits(int index, int shift) {
+    public void createEncodedValues(List<EncodedValue> registerNewEncodedValue, String prefix, int index) {
         // first two bits are reserved for route handling in superclass
-        shift = super.defineWayBits(index, shift);
-        speedEncoder = new EncodedDoubleValue("Speed", shift, speedBits, speedFactor, defaultSpeedMap.get("secondary"),
-                maxPossibleSpeed);
-        return shift + speedEncoder.getBits();
+        super.createEncodedValues(registerNewEncodedValue, prefix, index);
+        registerNewEncodedValue.add(speedEncoder = new DecimalEncodedValue(prefix + "average_speed", speedBits, speedDefault, speedFactor, speedTwoDirections));
     }
 
     protected double getSpeed(ReaderWay way) {
@@ -252,21 +253,23 @@ public class CarFlagEncoder extends AbstractFlagEncoder {
 
             boolean isRoundabout = way.hasTag("junction", "roundabout") || way.hasTag("junction", "circular");
             if (isRoundabout)
-                setBool(edgeFlags, K_ROUNDABOUT, true);
+                roundaboutEnc.setBool(false, edgeFlags, true);
 
             if (isOneway(way) || isRoundabout) {
-                if (isBackwardOneway(way))
-                    edgeFlags.flags |= backwardBit;
-
                 if (isForwardOneway(way))
-                    edgeFlags.flags |= forwardBit;
-            } else
-                edgeFlags.flags |= directionBitMask;
+                    accessEnc.setBool(false, edgeFlags, true);
+                if (isBackwardOneway(way))
+                    accessEnc.setBool(true, edgeFlags, true);
+            } else {
+                accessEnc.setBool(false, edgeFlags, true);
+                accessEnc.setBool(true, edgeFlags, true);
+            }
 
         } else {
             double ferrySpeed = getFerrySpeed(way);
             setSpeed(edgeFlags, ferrySpeed);
-            edgeFlags.flags |= directionBitMask;
+            accessEnc.setBool(false, edgeFlags, true);
+            accessEnc.setBool(true, edgeFlags, true);
         }
 
         for (String restriction : restrictions) {

@@ -17,6 +17,8 @@
  */
 package com.graphhopper.storage.index;
 
+import com.graphhopper.routing.profiles.BooleanEncodedValue;
+import com.graphhopper.routing.profiles.DecimalEncodedValue;
 import com.graphhopper.routing.util.*;
 import com.graphhopper.storage.*;
 import com.graphhopper.util.DistanceCalc;
@@ -334,8 +336,10 @@ public abstract class AbstractLocationIndexTester {
         // now make all edges from node 1 accessible for CAR only
         EdgeIterator iter = g.createEdgeExplorer().setBaseNode(1);
         CarFlagEncoder carEncoder = (CarFlagEncoder) encodingManager.getEncoder("car");
+        DecimalEncodedValue avSpeedEnc = carEncoder.getAverageSpeedEnc();
+        BooleanEncodedValue accessEnc = carEncoder.getAccessEnc();
         while (iter.next()) {
-            iter.setFlags(carEncoder.setAccess(carEncoder.setSpeed(new IntsRef(), 50), true, true));
+            iter.set(avSpeedEnc, 50.0).set(accessEnc, true).setReverse(accessEnc, true);
         }
         idx.close();
 

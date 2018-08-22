@@ -18,16 +18,17 @@
 package com.graphhopper.routing.util;
 
 import com.graphhopper.reader.ReaderWay;
+import com.graphhopper.routing.profiles.DecimalEncodedValue;
+import com.graphhopper.routing.profiles.EncodedValue;
+import com.graphhopper.routing.profiles.IntEncodedValue;
 import com.graphhopper.routing.weighting.CurvatureWeighting;
 import com.graphhopper.routing.weighting.PriorityWeighting;
 import com.graphhopper.storage.IntsRef;
-import com.graphhopper.util.BitUtil;
 import com.graphhopper.util.EdgeIteratorState;
 import com.graphhopper.util.PMap;
 
 import java.util.HashSet;
-
-import static com.graphhopper.routing.util.PriorityCode.BEST;
+import java.util.List;
 
 /**
  * Defines bit layout for motorbikes
@@ -37,20 +38,17 @@ import static com.graphhopper.routing.util.PriorityCode.BEST;
  * @author boldtrn
  */
 public class MotorcycleFlagEncoder extends CarFlagEncoder {
-    public static final int CURVATURE_KEY = 112;
     private final HashSet<String> avoidSet = new HashSet<>();
     private final HashSet<String> preferSet = new HashSet<>();
-    private EncodedDoubleValue reverseSpeedEncoder;
-    private EncodedValue priorityWayEncoder;
-    private EncodedValue curvatureEncoder;
+    private DecimalEncodedValue priorityWayEncoder;
+    private IntEncodedValue curvatureEncoder;
 
     public MotorcycleFlagEncoder() {
         this(5, 5, 0);
     }
 
     public MotorcycleFlagEncoder(PMap properties) {
-        this(
-                (int) properties.getLong("speed_bits", 5),
+        this((int) properties.getLong("speed_bits", 5),
                 properties.getDouble("speed_factor", 5),
                 properties.getBool("turn_costs", false) ? 1 : 0
         );
@@ -64,6 +62,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
 
     public MotorcycleFlagEncoder(int speedBits, double speedFactor, int maxTurnCosts) {
         super(speedBits, speedFactor, maxTurnCosts);
+        speedTwoDirections = true;
         restrictions.remove("motorcar");
         //  moped, mofa
         restrictions.add("motorcycle");
@@ -122,27 +121,22 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
 
     @Override
     public int getVersion() {
-        return 2;
+        return 3;
     }
 
     /**
      * Define the place of the speedBits in the edge flags for car.
      */
     @Override
-    public int defineWayBits(int index, int shift) {
+    public void createEncodedValues(List<EncodedValue> registerNewEncodedValue, String prefix, int index) {
         // first two bits are reserved for route handling in superclass
-        shift = super.defineWayBits(index, shift);
-        reverseSpeedEncoder = new EncodedDoubleValue("Reverse Speed", shift, speedBits, speedFactor,
-                defaultSpeedMap.get("secondary"), maxPossibleSpeed);
-        shift += reverseSpeedEncoder.getBits();
+        super.createEncodedValues(registerNewEncodedValue, prefix, index);
 
-        priorityWayEncoder = new EncodedValue("PreferWay", shift, 3, 1, 3, 7);
-        shift += priorityWayEncoder.getBits();
+        // TODO max == 7
+        registerNewEncodedValue.add(priorityWayEncoder = new DecimalEncodedValue(prefix + "priority", 3, 3, 1.0 / PriorityCode.BEST.getValue(), false));
 
-        curvatureEncoder = new EncodedValue("Curvature", shift, 4, 1, 10, 10);
-        shift += curvatureEncoder.getBits();
-
-        return shift;
+        // TODO max == 10
+        registerNewEncodedValue.add(curvatureEncoder = new IntEncodedValue(prefix + "curvature", 4, 10, false));
     }
 
     @Override
@@ -191,9 +185,9 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
     }
 
     @Override
-    public IntsRef handleWayTags(IntsRef edgeInts, ReaderWay way, long allowed, long priorityFromRelation) {
+    public IntsRef handleWayTags(IntsRef edgeFlags, ReaderWay way, long allowed, long priorityFromRelation) {
         if (!isAccept(allowed))
-            return edgeInts;
+            return edgeFlags;
 
         if (!isFerry(allowed)) {
             // get assumed speed from highway type
@@ -210,104 +204,36 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
 
             boolean isRoundabout = way.hasTag("junction", "roundabout") || way.hasTag("junction", "circular");
             if (isRoundabout)
-                setBool(edgeInts, K_ROUNDABOUT, true);
+                roundaboutEnc.setBool(false, edgeFlags, true);
 
             if (way.hasTag("oneway", oneways) || isRoundabout) {
                 if (way.hasTag("oneway", "-1")) {
-                    setReverseSpeed(edgeInts, speed);
-                    edgeInts.flags |= backwardBit;
+                    setReverseSpeed(edgeFlags, speed);
+                    accessEnc.setBool(true, edgeFlags, true);
                 } else {
-                    setSpeed(edgeInts, speed);
-                    edgeInts.flags |= forwardBit;
+                    setSpeed(edgeFlags, speed);
+                    accessEnc.setBool(false, edgeFlags, true);
                 }
             } else {
-                setSpeed(edgeInts, speed);
-                setReverseSpeed(edgeInts, speed);
-                edgeInts.flags |= directionBitMask;
+                setSpeed(edgeFlags, speed);
+                setReverseSpeed(edgeFlags, speed);
+                accessEnc.setBool(false, edgeFlags, true);
+                accessEnc.setBool(true, edgeFlags, true);
             }
 
         } else {
             double ferrySpeed = getFerrySpeed(way);
-            setSpeed(edgeInts, ferrySpeed);
-            setReverseSpeed(edgeInts, ferrySpeed);
-            edgeInts.flags |= directionBitMask;
+            setSpeed(edgeFlags, ferrySpeed);
+            setReverseSpeed(edgeFlags, ferrySpeed);
+            accessEnc.setBool(false, edgeFlags, true);
+            accessEnc.setBool(true, edgeFlags, true);
         }
 
-        // relations are not yet stored -> see BikeCommonFlagEncoder.defineRelationBits how to do this
-        priorityWayEncoder.setValue(edgeInts, handlePriority(priorityFromRelation, way));
+        priorityWayEncoder.setInt(false, edgeFlags, handlePriority(priorityFromRelation, way));
 
         // Set the curvature to the Maximum
-        curvatureEncoder.setValue(edgeInts, 10);
-        return edgeInts;
-    }
-
-    @Override
-    public double getReverseSpeed(IntsRef flags) {
-        return reverseSpeedEncoder.getDoubleValue(flags);
-    }
-
-    @Override
-    public IntsRef setReverseSpeed(IntsRef edgeFlags, double speed) {
-        if (speed < 0)
-            throw new IllegalArgumentException("Speed cannot be negative: " + speed + ", flags:" + BitUtil.LITTLE.toBitString(edgeFlags.flags));
-
-        if (speed < speedEncoder.factor / 2) {
-            setLowSpeed(edgeFlags, speed, true);
-            return edgeFlags;
-        }
-
-        if (speed > getMaxSpeed())
-            speed = getMaxSpeed();
-
-        reverseSpeedEncoder.setDoubleValue(edgeFlags, speed);
+        curvatureEncoder.setInt(false, edgeFlags, 10);
         return edgeFlags;
-    }
-
-    @Override
-    protected void setLowSpeed(IntsRef intsRef, double speed, boolean reverse) {
-        if (reverse) {
-            reverseSpeedEncoder.setDoubleValue(intsRef, 0);
-            setBool(intsRef, K_BACKWARD, false);
-            return;
-        }
-
-        speedEncoder.setDoubleValue(intsRef, 0);
-        setBool(intsRef, K_FORWARD, false);
-    }
-
-    @Override
-    public void flagsDefault(IntsRef edgeFlags, boolean forward, boolean backward) {
-        super.flagsDefault(edgeFlags, forward, backward);
-        if (backward)
-            reverseSpeedEncoder.setDefaultValue(edgeFlags);
-    }
-
-    @Override
-    public long reverseFlags(long flags) {
-        // swap access
-        // TODO it is more than inefficient to create a new here,
-        // but as the IntRefs is mutable, we need this, otherwise this internal reversal is propagated to outside edge.getFlags()
-        // Or we would have to make the public API again using 'long flags' which is also problematic for this refactoring
-        // Probably best final solution is to either remove the reverseFlags-mechanism or the bit solution like in DataFlagEncoder#reverseFlags
-        IntsRef intsRef = new IntsRef();
-        intsRef.flags = super.reverseFlags(flags);
-        // swap speeds
-        double otherValue = reverseSpeedEncoder.getDoubleValue(intsRef);
-        setReverseSpeed(intsRef, speedEncoder.getDoubleValue(intsRef));
-        setSpeed(intsRef, otherValue);
-        return intsRef.flags;
-    }
-
-    @Override
-    public double getDouble(IntsRef flags, int key) {
-        switch (key) {
-            case PriorityWeighting.KEY:
-                return (double) priorityWayEncoder.getValue(flags) / BEST.getValue();
-            case MotorcycleFlagEncoder.CURVATURE_KEY:
-                return (double) curvatureEncoder.getValue(flags) / 10;
-            default:
-                return super.getDouble(flags, key);
-        }
     }
 
     private int handlePriority(long relationFlags, ReaderWay way) {
@@ -333,7 +259,7 @@ public class MotorcycleFlagEncoder extends CarFlagEncoder {
         bendiness = increaseBendinessImpact(bendiness);
         bendiness = correctErrors(bendiness);
 
-        this.curvatureEncoder.setValue(intsRef, convertToInt(bendiness));
+        this.curvatureEncoder.setInt(false, intsRef, convertToInt(bendiness));
         edge.setFlags(intsRef);
     }
 

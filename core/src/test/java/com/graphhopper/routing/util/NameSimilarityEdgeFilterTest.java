@@ -185,16 +185,6 @@ public class NameSimilarityEdgeFilterTest {
             public String getName() {
                 return name;
             }
-
-            @Override
-            public boolean isForward(FlagEncoder encoder) {
-                return true;
-            }
-
-            @Override
-            public boolean isBackward(FlagEncoder encoder) {
-                return true;
-            }
         };
     }
 }
